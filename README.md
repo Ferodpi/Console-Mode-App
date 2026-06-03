@@ -4,7 +4,7 @@ A lightweight Python utility to instantly switch your primary monitor, reroute a
 
 Requirements:
 
-NirCmd (Required): This app relies on NirCmd to physically switch the hardware. It comes included in the zip file, tho it can alternatively be downloaded from NirSoft.
+NirCmd (Required): This app relies on NirCmd to switch the hardware. It comes included in the zip file, tho it can alternatively be downloaded from NirSoft.
 
 Python Packages (If running from source): customtkinter, screeninfo, pycaw, comtypes, wmi.
 
