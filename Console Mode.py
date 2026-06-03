@@ -6,13 +6,50 @@ import customtkinter as ctk
 import wmi
 import subprocess
 import time
+import ctypes
+import json
+import os
 
+# Set path to save settings:
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SAVE_PATH = os.path.join(SCRIPT_DIR, 'settings.json')
+NIRCMD_PATH = os.path.join(SCRIPT_DIR, 'nircmd.exe')
+
+class DISPLAY_DEVICE(ctypes.Structure):
+    _fields_ = [
+        ('cb', ctypes.c_uint32),
+        ('DeviceName', ctypes.c_wchar*32),
+        ('DeviceString', ctypes.c_wchar*128),
+        ('StateFlags', ctypes.c_uint32),
+        ('DeviceID', ctypes.c_wchar*128),
+        ('DeviceKey', ctypes.c_wchar*128)
+    ]
 # Functions:
 def apply():
     target_display = display_dropdown.get()
     target_speaker = speaker_dropdown.get()
     current_display_label.configure(text=f'Current Display:\n{target_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{target_speaker}')
+
+    if os.path.exists(NIRCMD_PATH):
+        raw_display = display_map[target_display]
+        subprocess.run([NIRCMD_PATH, 'setprimarydisplay', raw_display])
+        subprocess.run([NIRCMD_PATH, 'setdefaultsounddevice', target_speaker])
+    
+    # Remember choices logic:
+    if remember_var.get() == 'on':
+        settings = {
+            'display': target_display,
+            'speaker': target_speaker,
+            'remember': 'on',
+            'steam': steam_var.get()
+        }
+        with open(SAVE_PATH, 'w') as f:
+            json.dump(settings, f)
+    else:
+        if os.path.exists(SAVE_PATH):
+            os.remove(SAVE_PATH)
+
     if steam_var.get() == 'on':
         subprocess.run(['cmd', '/c', 'start', 'steam://open/bigpicture'])
 
@@ -20,31 +57,44 @@ def revert():
     current_display_label.configure(text=f'Current Display:\n{current_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{current_speaker}')
 
+    if os.path.exists(NIRCMD_PATH):
+        subprocess.run([NIRCMD_PATH, 'setprimarydisplay', current_display_raw])
+        subprocess.run([NIRCMD_PATH, 'setdefaultsounddevice', current_speaker])
+
 # Create hardware lists:
 system_wmi = wmi.WMI(namespace='root\\WMI') # Connects to Windows monitor hardware database
-wmi_monitorlist = system_wmi.WmiMonitorID()
 monitors = get_monitors()
-monitor_options = []
 
-hardware_names = []
-for w in wmi_monitorlist:
-    # Convert the names WMI shows as numbers to text:
+# Grab the user friendly names and their HID from WMI:
+wmi_names ={}
+for w in system_wmi.WmiMonitorID():
     clean_name = ''.join([chr(c) for c in w.UserFriendlyName if c != 0])
-    hardware_names.append(clean_name)
+    pnp_id = w.InstanceName.split('\\')[1] # Extracts the unique hardware ID
+    wmi_names[pnp_id] = clean_name
 
-# Create dropdown lists:
+monitor_options = []
+display_map = {}
 current_display = 'Placeholder'
-for i, m in enumerate(monitors): # Adds each display info to the list
+current_display_raw = 'Placeholder'
+
+for m in monitors:
+    device = DISPLAY_DEVICE()
+    device.cb = ctypes.sizeof(device)
+    ctypes.windll.user32.EnumDisplayDevicesW(m.name, 0, ctypes.byref(device), 0)
+
     try:
-        display_name = hardware_names[i] # Gets name assigned by Windows 
+        pnp_id = device.DeviceID.split('\\')[1]
+        display_name = wmi_names.get(pnp_id, m.name.replace('\\\\.\\', ''))
     except IndexError:
-        display_name = f'Display {i+1}'
+        display_name = m.name.replace('\\\\.\\', '')
 
     display_entry = f'{display_name} ({m.width}x{m.height})'
     monitor_options.append(display_entry)
-    # Check for primary:
-    if i == 0 or m.is_primary:
+    display_map[display_entry] = m.name
+
+    if m.is_primary:
         current_display = display_entry
+        current_display_raw = m.name
 
 devices = AudioUtilities.GetDeviceEnumerator() # Tool to list audio devices
 enumerator = AudioUtilities.GetDeviceEnumerator()
@@ -110,6 +160,24 @@ revert_btn = ctk.CTkButton(button_frame, text='Revert', fg_color='gray', command
 revert_btn.pack(side='left')
 apply_btn = ctk.CTkButton(button_frame, text='Apply', fg_color='gray', command=apply)
 apply_btn.pack(side='right')
+
+# Load saved settings:
+if os.path.exists(SAVE_PATH):
+    try:
+        with open(SAVE_PATH, 'r') as f:
+            saved = json.load(f)
+        if saved.get('display') in monitor_options:
+            display_dropdown.set(saved['display'])
+        if saved.get('speaker') in speaker_options:
+            speaker_dropdown.set(saved['speaker'])
+
+        remember_var.set(saved.get('remember', 'off'))
+        steam_var.set(saved.get('steam', 'off'))
+
+    # Delete config file if app fails to read it:
+    except Exception as e:
+        if os.path.exists(SAVE_PATH):
+            os.remove(SAVE_PATH)
 
 # Start:
 app.mainloop()
