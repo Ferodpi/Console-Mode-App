@@ -2,7 +2,8 @@
 
 A lightweight Python utility to instantly switch your primary monitor, reroute audio, and launch Steam Big Picture mode in one click. Built to seamlessly transition from a desktop workstation to a TV couch setup.
 
-Requirements
+Requirements:
+
 NirCmd (Required): This app relies on NirCmd to physically switch the hardware. It comes included in the zip file, tho it can alternatively be downloaded from NirSoft.
 
 Python Packages (If running from source): customtkinter, screeninfo, pycaw, comtypes, wmi.
