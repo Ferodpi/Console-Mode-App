@@ -1,0 +1,15 @@
+# Ignore PyInstaller build folders and spec files
+build/
+dist/
+*.spec
+
+# Ignore Python virtual environments
+.venv/
+env/
+
+# Ignore external dependencies
+nircmd.exe
+SoundVolumeView.exe
+
+# Ignore user-specific local settings
+settings.json

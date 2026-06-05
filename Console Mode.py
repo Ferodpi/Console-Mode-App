@@ -1,19 +1,26 @@
-# Libraries:
-from screeninfo import get_monitors 
-from pycaw.pycaw import AudioUtilities
-from comtypes import CLSCTX_ALL
-import customtkinter as ctk
-import wmi
+# Built-in Python libraries:
 import subprocess
-import time
 import ctypes
 import json
 import os
+import sys
+
+#Third party Libraries (pip installs):
+import wmi
+import customtkinter as ctk
+from screeninfo import get_monitors 
+from pycaw.pycaw import AudioUtilities
 
 # Set path to save settings:
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SAVE_PATH = os.path.join(SCRIPT_DIR, 'settings.json')
-NIRCMD_PATH = os.path.join(SCRIPT_DIR, 'nircmd.exe')
+if getattr(sys,'frozen', False):
+    # Runs only if compiled as an .exe file
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Runs only as .py code
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SAVE_PATH = os.path.join(BASE_DIR, 'settings.json')
+NIRCMD_PATH = os.path.join(BASE_DIR, 'nircmd.exe')
+SOUNDVOLUMEVIEW_PATH = os.path.join(BASE_DIR, 'SoundVolumeView.exe')
 
 class DISPLAY_DEVICE(ctypes.Structure):
     _fields_ = [
@@ -26,6 +33,7 @@ class DISPLAY_DEVICE(ctypes.Structure):
     ]
 # Functions:
 def apply():
+    """Applies target display and audio settings using NirCMD and SoundVolumeView, saves preferences in a json file, and launches Steam."""
     target_display = display_dropdown.get()
     target_speaker = speaker_dropdown.get()
     current_display_label.configure(text=f'Current Display:\n{target_display}')
@@ -34,7 +42,9 @@ def apply():
     if os.path.exists(NIRCMD_PATH):
         raw_display = display_map[target_display]
         subprocess.run([NIRCMD_PATH, 'setprimarydisplay', raw_display])
-        subprocess.run([NIRCMD_PATH, 'setdefaultsounddevice', target_speaker])
+    if os.path.exists(SOUNDVOLUMEVIEW_PATH):
+        raw_speaker = speaker_map[target_speaker]
+        subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', raw_speaker, 'all'])
     
     # Remember choices logic:
     if remember_var.get() == 'on':
@@ -54,19 +64,21 @@ def apply():
         subprocess.run(['cmd', '/c', 'start', 'steam://open/bigpicture'])
 
 def revert():
+    """Restores the original system display and default audio endpoint, effectively reverting the changes made in the current session"""
     current_display_label.configure(text=f'Current Display:\n{current_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{current_speaker}')
 
     if os.path.exists(NIRCMD_PATH):
         subprocess.run([NIRCMD_PATH, 'setprimarydisplay', current_display_raw])
-        subprocess.run([NIRCMD_PATH, 'setdefaultsounddevice', current_speaker])
+    if os.path.exists(SOUNDVOLUMEVIEW_PATH):
+        subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', current_speaker_raw, 'all'])
 
 # Create hardware lists:
 system_wmi = wmi.WMI(namespace='root\\WMI') # Connects to Windows monitor hardware database
 monitors = get_monitors()
 
 # Grab the user friendly names and their HID from WMI:
-wmi_names ={}
+wmi_names = {}
 for w in system_wmi.WmiMonitorID():
     clean_name = ''.join([chr(c) for c in w.UserFriendlyName if c != 0])
     pnp_id = w.InstanceName.split('\\')[1] # Extracts the unique hardware ID
@@ -88,7 +100,7 @@ for m in monitors:
     except IndexError:
         display_name = m.name.replace('\\\\.\\', '')
 
-    display_entry = f'{display_name} ({m.width}x{m.height})'
+    display_entry = f'{display_name} [{m.name.replace("\\\\.\\", "")}] ({m.width}x{m.height})'
     monitor_options.append(display_entry)
     display_map[display_entry] = m.name
 
@@ -96,18 +108,33 @@ for m in monitors:
         current_display = display_entry
         current_display_raw = m.name
 
-devices = AudioUtilities.GetDeviceEnumerator() # Tool to list audio devices
 enumerator = AudioUtilities.GetDeviceEnumerator()
-devices = enumerator.EnumAudioEndpoints(0, 1) # First number is output/input, second is state
+AUDIO_RENDER = 0
+AUDIO_ACTIVE = 1
+devices = enumerator.EnumAudioEndpoints(AUDIO_RENDER, AUDIO_ACTIVE)
 
-speaker_options= []
+speaker_options = []
+speaker_map = {} # Dictionary to map UI names to SoundVolumeView Hardware IDs
 for i in range(devices.GetCount()):
     device = devices.Item(i)
     friendly_name = AudioUtilities.CreateDevice(device).FriendlyName
+    device_id = device.GetId()
+
+    # Failsafe in case of duplicate speaker names:
+    original_name = friendly_name
+    counter = 1
+    while friendly_name in speaker_map:
+        friendly_name = f'{original_name} ({counter})'
+        counter += 1
+
     speaker_options.append(friendly_name)
+    speaker_map[friendly_name] = device_id
+
 # Check for primary:
-default_speaker = enumerator.GetDefaultAudioEndpoint(0,1)
-current_speaker = AudioUtilities.CreateDevice(default_speaker).FriendlyName
+default_speaker = enumerator.GetDefaultAudioEndpoint(AUDIO_RENDER, AUDIO_ACTIVE)
+current_speaker_raw = default_speaker.GetId()
+# Reverse lookup the disctionary to get UI name:
+current_speaker = next(name for name, id in speaker_map.items() if id == current_speaker_raw)
 
 # System skin:
 ctk.set_appearance_mode('dark')
@@ -116,7 +143,7 @@ ctk.set_default_color_theme('blue')
 # Main window:
 app = ctk.CTk()
 app.geometry('700x450')
-app.title('Gaming Mode')
+app.title('Console Mode')
 app.resizable(False, False)
 
 # Show current output on top:
@@ -175,9 +202,10 @@ if os.path.exists(SAVE_PATH):
         steam_var.set(saved.get('steam', 'off'))
 
     # Delete config file if app fails to read it:
-    except Exception as e:
+    except Exception:
         if os.path.exists(SAVE_PATH):
             os.remove(SAVE_PATH)
 
 # Start:
-app.mainloop()
+if __name__ == '__main__':
+    app.mainloop()
