@@ -4,9 +4,9 @@ A lightweight Python utility to instantly switch your primary monitor, reroute a
 
 Requirements:
 
-NirCmd (Required): This app relies on NirCmd to switch the hardware. It comes included in the zip file, tho it can alternatively be downloaded from NirSoft.
-
-Python Packages (If running from source): customtkinter, screeninfo, pycaw, comtypes, wmi.
+* NirCmd: Handles display profile switching. [Download from NirSoft](https://www.nirsoft.net/utils/nircmd.html).
+* SoundVolumeView: Manages audio device routing. [Download from NirSoft](https://www.nirsoft.net/utils/sound_volume_view.html).
+* Python Packages (If running from source): customtkinter, screeninfo, pycaw, comtypes, wmi.
 
 ## Usage:
 * Launch the app and select your target gaming display and audio output.
