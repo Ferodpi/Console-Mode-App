@@ -19,7 +19,7 @@ else:
     # Runs only as .py code
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_PATH = os.path.join(BASE_DIR, 'settings.json')
-NIRCMD_PATH = os.path.join(BASE_DIR, 'nircmd.exe')
+MULTIMONITOR_PATH = os.path.join(BASE_DIR, 'MultiMonitorTool.exe')
 SOUNDVOLUMEVIEW_PATH = os.path.join(BASE_DIR, 'SoundVolumeView.exe')
 
 class DISPLAY_DEVICE(ctypes.Structure):
@@ -33,15 +33,15 @@ class DISPLAY_DEVICE(ctypes.Structure):
     ]
 # Functions:
 def apply():
-    """Applies target display and audio settings using NirCMD and SoundVolumeView, saves preferences in a json file, and launches Steam."""
+    """Applies target display and audio settings using MultiMonitorTool and SoundVolumeView, saves preferences in a json file, and launches Steam."""
     target_display = display_dropdown.get()
     target_speaker = speaker_dropdown.get()
     current_display_label.configure(text=f'Current Display:\n{target_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{target_speaker}')
 
-    if os.path.exists(NIRCMD_PATH):
+    if os.path.exists(MULTIMONITOR_PATH):
         raw_display = display_map[target_display]
-        subprocess.run([NIRCMD_PATH, 'setprimarydisplay', raw_display])
+        subprocess.run([MULTIMONITOR_PATH, '/SetPrimary', raw_display])
     if os.path.exists(SOUNDVOLUMEVIEW_PATH):
         raw_speaker = speaker_map[target_speaker]
         subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', raw_speaker, 'all'])
@@ -68,8 +68,8 @@ def revert():
     current_display_label.configure(text=f'Current Display:\n{current_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{current_speaker}')
 
-    if os.path.exists(NIRCMD_PATH):
-        subprocess.run([NIRCMD_PATH, 'setprimarydisplay', current_display_raw])
+    if os.path.exists(MULTIMONITOR_PATH):
+        subprocess.run([MULTIMONITOR_PATH, '/SetPrimary', current_display_raw])
     if os.path.exists(SOUNDVOLUMEVIEW_PATH):
         subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', current_speaker_raw, 'all'])
 
@@ -89,18 +89,18 @@ display_map = {}
 current_display = 'Placeholder'
 current_display_raw = 'Placeholder'
 
-for m in monitors:
+for index, m in enumerate(monitors, start=1):
     device = DISPLAY_DEVICE()
     device.cb = ctypes.sizeof(device)
     ctypes.windll.user32.EnumDisplayDevicesW(m.name, 0, ctypes.byref(device), 0)
 
     try:
         pnp_id = device.DeviceID.split('\\')[1]
-        display_name = wmi_names.get(pnp_id, m.name.replace('\\\\.\\', ''))
+        display_name = wmi_names.get(pnp_id, f'Display {index}')
     except IndexError:
-        display_name = m.name.replace('\\\\.\\', '')
+        display_name = f'Display {index}'
 
-    display_entry = f'{display_name} [{m.name.replace("\\\\.\\", "")}] ({m.width}x{m.height})'
+    display_entry = f'{display_name} [Display {index}] ({m.width}x{m.height})'
     monitor_options.append(display_entry)
     display_map[display_entry] = m.name
 

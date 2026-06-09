@@ -4,7 +4,7 @@ A lightweight Python utility to instantly switch your primary monitor, reroute a
 
 Requirements:
 
-* NirCmd: Handles display profile switching. [Download from NirSoft](https://www.nirsoft.net/utils/nircmd.html).
+* MultiMonitorTool: Handles display profile switching. [Download from NirSoft](https://www.nirsoft.net/utils/multi_monitor_tool.html).
 * SoundVolumeView: Manages audio device routing. [Download from NirSoft](https://www.nirsoft.net/utils/sound_volume_view.html).
 * Python Packages (If running from source): customtkinter, screeninfo, pycaw, comtypes, wmi.
 

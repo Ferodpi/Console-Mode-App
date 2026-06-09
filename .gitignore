@@ -8,7 +8,7 @@ dist/
 env/
 
 # Ignore external dependencies
-nircmd.exe
+MultiMonitorTool.exe
 SoundVolumeView.exe
 
 # Ignore user-specific local settings
