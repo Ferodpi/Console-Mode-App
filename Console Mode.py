@@ -1,36 +1,24 @@
 # Built-in Python libraries:
-import subprocess
-import ctypes
 import json
 import os
 import sys
 
-#Third party Libraries (pip installs):
-import wmi
-import customtkinter as ctk
-from screeninfo import get_monitors 
-from pycaw.pycaw import AudioUtilities
+# Third party Libraries (pip installs):
+import customtkinter as ctk # Creates GUI
+
+# Backend Import:
+if sys.platform == 'win32':
+    import Windows_backend as backend
+elif sys.platform == 'linux':
+    import Linux_backend as backend
 
 # Set path to save settings:
-if getattr(sys,'frozen', False):
-    # Runs only if compiled as an .exe file
+if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
-    # Runs only as .py code
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_PATH = os.path.join(BASE_DIR, 'settings.json')
-MULTIMONITOR_PATH = os.path.join(BASE_DIR, 'MultiMonitorTool.exe')
-SOUNDVOLUMEVIEW_PATH = os.path.join(BASE_DIR, 'SoundVolumeView.exe')
 
-class DISPLAY_DEVICE(ctypes.Structure):
-    _fields_ = [
-        ('cb', ctypes.c_uint32),
-        ('DeviceName', ctypes.c_wchar*32),
-        ('DeviceString', ctypes.c_wchar*128),
-        ('StateFlags', ctypes.c_uint32),
-        ('DeviceID', ctypes.c_wchar*128),
-        ('DeviceKey', ctypes.c_wchar*128)
-    ]
 # Functions:
 def apply():
     """Applies target display and audio settings using MultiMonitorTool and SoundVolumeView, saves preferences in a json file, and launches Steam."""
@@ -39,12 +27,8 @@ def apply():
     current_display_label.configure(text=f'Current Display:\n{target_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{target_speaker}')
 
-    if os.path.exists(MULTIMONITOR_PATH):
-        raw_display = display_map[target_display]
-        subprocess.run([MULTIMONITOR_PATH, '/SetPrimary', raw_display])
-    if os.path.exists(SOUNDVOLUMEVIEW_PATH):
-        raw_speaker = speaker_map[target_speaker]
-        subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', raw_speaker, 'all'])
+    backend.set_display(display_map[target_display])
+    backend.set_speaker(speaker_map[target_speaker])
     
     # Remember choices logic:
     if remember_var.get() == 'on':
@@ -61,28 +45,21 @@ def apply():
             os.remove(SAVE_PATH)
 
     if steam_var.get() == 'on':
-        subprocess.run(['cmd', '/c', 'start', 'steam://open/bigpicture'])
+        backend.launch_steam()
 
 def revert():
     """Restores the original system display and default audio endpoint, effectively reverting the changes made in the current session"""
     current_display_label.configure(text=f'Current Display:\n{current_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{current_speaker}')
 
-    if os.path.exists(MULTIMONITOR_PATH):
-        subprocess.run([MULTIMONITOR_PATH, '/SetPrimary', current_display_raw])
-    if os.path.exists(SOUNDVOLUMEVIEW_PATH):
-        subprocess.run([SOUNDVOLUMEVIEW_PATH, '/SetDefault', current_speaker_raw, 'all'])
+    backend.set_display(current_display_raw)
+    backend.set_speaker(current_speaker_raw)
 
 # Create hardware lists:
-system_wmi = wmi.WMI(namespace='root\\WMI') # Connects to Windows monitor hardware database
-monitors = get_monitors()
+monitors = backend.screeninfo_get_monitors() 
 
 # Grab the user friendly names and their HID from WMI:
-wmi_names = {}
-for w in system_wmi.WmiMonitorID():
-    clean_name = ''.join([chr(c) for c in w.UserFriendlyName if c != 0])
-    pnp_id = w.InstanceName.split('\\')[1] # Extracts the unique hardware ID
-    wmi_names[pnp_id] = clean_name
+wmi_names = backend.get_wmi_names()
 
 monitor_options = []
 display_map = {}
@@ -90,15 +67,8 @@ current_display = 'Placeholder'
 current_display_raw = 'Placeholder'
 
 for index, m in enumerate(monitors, start=1):
-    device = DISPLAY_DEVICE()
-    device.cb = ctypes.sizeof(device)
-    ctypes.windll.user32.EnumDisplayDevicesW(m.name, 0, ctypes.byref(device), 0)
-
-    try:
-        pnp_id = device.DeviceID.split('\\')[1]
-        display_name = wmi_names.get(pnp_id, f'Display {index}')
-    except IndexError:
-        display_name = f'Display {index}'
+    device = backend.get_display_device(m)
+    display_name = backend.get_display_name(device, wmi_names, index)
 
     display_entry = f'{display_name} [Display {index}] ({m.width}x{m.height})'
     monitor_options.append(display_entry)
@@ -108,33 +78,7 @@ for index, m in enumerate(monitors, start=1):
         current_display = display_entry
         current_display_raw = m.name
 
-enumerator = AudioUtilities.GetDeviceEnumerator()
-AUDIO_RENDER = 0
-AUDIO_ACTIVE = 1
-devices = enumerator.EnumAudioEndpoints(AUDIO_RENDER, AUDIO_ACTIVE)
-
-speaker_options = []
-speaker_map = {} # Dictionary to map UI names to SoundVolumeView Hardware IDs
-for i in range(devices.GetCount()):
-    device = devices.Item(i)
-    friendly_name = AudioUtilities.CreateDevice(device).FriendlyName
-    device_id = device.GetId()
-
-    # Failsafe in case of duplicate speaker names:
-    original_name = friendly_name
-    counter = 1
-    while friendly_name in speaker_map:
-        friendly_name = f'{original_name} ({counter})'
-        counter += 1
-
-    speaker_options.append(friendly_name)
-    speaker_map[friendly_name] = device_id
-
-# Check for primary:
-default_speaker = enumerator.GetDefaultAudioEndpoint(AUDIO_RENDER, AUDIO_ACTIVE)
-current_speaker_raw = default_speaker.GetId()
-# Reverse lookup the disctionary to get UI name:
-current_speaker = next(name for name, id in speaker_map.items() if id == current_speaker_raw)
+speaker_options, speaker_map, current_speaker, current_speaker_raw = backend.get_audio_devices()
 
 # System skin:
 ctk.set_appearance_mode('dark')

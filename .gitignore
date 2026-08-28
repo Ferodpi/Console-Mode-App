@@ -6,6 +6,7 @@ dist/
 # Ignore Python virtual environments
 .venv/
 env/
+.venv_linux/
 
 # Ignore external dependencies
 MultiMonitorTool.exe
