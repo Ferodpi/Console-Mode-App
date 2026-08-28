@@ -9,6 +9,7 @@ A lightweight Windows utility that instantly switches your primary monitor, chan
 Supported operating systems:
 - Windows 10
 - Windows 11
+- Linux (Work In Progress)
 
 ### Prebuilt release:
 
