@@ -21,7 +21,7 @@ SAVE_PATH = os.path.join(BASE_DIR, 'settings.json')
 
 # Functions:
 def apply():
-    """Applies target display and audio settings using MultiMonitorTool and SoundVolumeView, saves preferences in a json file, and launches Steam."""
+    """Applies the selected display and audio settings, saves preferences if requested, and optionally launches Steam."""
     target_display = display_dropdown.get()
     target_speaker = speaker_dropdown.get()
     current_display_label.configure(text=f'Current Display:\n{target_display}')
@@ -38,8 +38,8 @@ def apply():
             'remember': 'on',
             'steam': steam_var.get()
         }
-        with open(SAVE_PATH, 'w') as f:
-            json.dump(settings, f)
+        with open(SAVE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=4)
     else:
         if os.path.exists(SAVE_PATH):
             os.remove(SAVE_PATH)
@@ -48,7 +48,7 @@ def apply():
         backend.launch_steam()
 
 def revert():
-    """Restores the original system display and default audio endpoint, effectively reverting the changes made in the current session"""
+    """Restores the original system display and default audio endpoint."""
     current_display_label.configure(text=f'Current Display:\n{current_display}')
     current_speaker_label.configure(text=f'Current Speaker:\n{current_speaker}')
 
@@ -56,19 +56,16 @@ def revert():
     backend.set_speaker(current_speaker_raw)
 
 # Create hardware lists:
-monitors = backend.screeninfo_get_monitors() 
+monitors = backend.get_displays() 
 
-# Grab the user friendly names and their HID from WMI:
-wmi_names = backend.get_wmi_names()
-
+# Build display options and mappings:
 monitor_options = []
 display_map = {}
-current_display = 'Placeholder'
-current_display_raw = 'Placeholder'
+current_display = 'Unknown'
+current_display_raw = 'Unknown'
 
 for index, m in enumerate(monitors, start=1):
-    device = backend.get_display_device(m)
-    display_name = backend.get_display_name(device, wmi_names, index)
+    display_name = backend.get_display_name(m, index)
 
     display_entry = f'{display_name} [Display {index}] ({m.width}x{m.height})'
     monitor_options.append(display_entry)
@@ -78,6 +75,7 @@ for index, m in enumerate(monitors, start=1):
         current_display = display_entry
         current_display_raw = m.name
 
+# Get audio devices:
 speaker_options, speaker_map, current_speaker, current_speaker_raw = backend.get_audio_devices()
 
 # System skin:
@@ -135,7 +133,7 @@ apply_btn.pack(side='right')
 # Load saved settings:
 if os.path.exists(SAVE_PATH):
     try:
-        with open(SAVE_PATH, 'r') as f:
+        with open(SAVE_PATH, 'r', encoding='utf-8') as f:
             saved = json.load(f)
         if saved.get('display') in monitor_options:
             display_dropdown.set(saved['display'])

@@ -3,10 +3,11 @@ import ctypes
 import os
 import subprocess # Runs external calls (.exe)
 import sys
+from functools import lru_cache
 
 # Third party Libraries (pip installs):
 import wmi
-from screeninfo import get_monitors as screeninfo_get_monitors
+from screeninfo import get_monitors
 from pycaw.pycaw import AudioUtilities
 
 # Set path to dependencies:
@@ -36,7 +37,8 @@ class DISPLAY_DEVICE(ctypes.Structure):
 system_wmi = wmi.WMI(namespace='root\\WMI') # Connects to Windows monitor hardware database
 
 # Monitor functions:
-def get_wmi_names():
+@lru_cache(maxsize=1)
+def _get_wmi_names():
     wmi_names = {}
     for w in system_wmi.WmiMonitorID():
         clean_name = ''.join([chr(c) for c in w.UserFriendlyName if c != 0])
@@ -45,7 +47,7 @@ def get_wmi_names():
     return wmi_names
 
 def get_displays():
-    return screeninfo_get_monitors()
+    return get_monitors()
 
 def get_display_device(monitor):
     device = DISPLAY_DEVICE()
@@ -58,7 +60,9 @@ def get_display_device(monitor):
     )
     return device
 
-def get_display_name(device, wmi_names, index):
+def get_display_name(monitor, index):
+    device = get_display_device(monitor)
+    wmi_names = _get_wmi_names()
     try:
         pnp_id = device.DeviceID.split('\\')[1]
         return wmi_names.get(pnp_id, f'Display {index}')
@@ -96,6 +100,7 @@ def get_audio_devices():
     current_speaker = next(name for name, id in speaker_map.items() if id == current_speaker_raw)
     return speaker_options, speaker_map, current_speaker, current_speaker_raw
 
+# Button functions:
 def set_display(display):
     if os.path.exists(MULTIMONITOR_PATH):
         subprocess.run([MULTIMONITOR_PATH, '/SetPrimary', display])
